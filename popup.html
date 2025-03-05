@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Calendar Group Manager</title>
+  <style>
+    body {
+      width: 350px;
+      padding: 10px;
+      font-family: sans-serif;
+    }
+    #groupCreation {
+      margin-bottom: 15px;
+      border-bottom: 1px solid #e0e0e0;
+      padding-bottom: 15px;
+    }
+    #groups {
+      margin-top: 15px;
+    }
+    .group {
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-bottom: 5px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    .group.selected {
+      background-color: #e0f7fa; /* Light cyan background for selected group */
+      border: 2px solid #00bcd4; /* More prominent border for selected group */
+    }
+    .group h3 {
+      margin-top: 0;
+      margin-bottom: 5px;
+      font-size: 16px;
+    }
+    .group input[type="checkbox"] {
+      margin-right: 5px;
+    }
+    .calendar {
+      margin-left: 10px;
+    }
+    #groupName {
+      width: calc(100% - 120px); /* Adjust width to make room for the add button */
+      padding: 5px;
+      margin-right: 5px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+    }
+    button {
+      padding: 5px 10px;
+      background-color: #00bcd4; /* Teal button color */
+      color: white;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    button:hover {
+      background-color: #0097a7; /* Darker teal on hover */
+    }
+    .remove-group {
+      background-color: #f44336;
+      margin-left: 10px;
+    }
+    .remove-group:hover {
+      background-color: #d32f2f;
+    }
+    #calendars {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 5px;
+    }
+    .calendar {
+      display: flex;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="groupCreation">
+    <h3>Create Calendar Group</h3>
+    <input type="text" id="groupName" placeholder="Group Name">
+    <button id="addGroup">Add Group</button>
+    
+    <h3>Available Calendars</h3>
+    <div id="calendars"></div>
+  </div>
+
+  <div id="existingGroups">
+    <h3>Existing Groups</h3>
+    <div id="groups"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
