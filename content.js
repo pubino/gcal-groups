@@ -118,7 +118,53 @@ async function thoroughCalendarScan() {
   return Array.from(calendars.values());
 }
 
+// Check UI dependencies
+function checkUIDependencies() {
+  const issues = [];
+
+  // Check for My calendars section
+  const myCalendars = document.querySelector('[aria-label="My calendars"]');
+  if (!myCalendars) {
+    issues.push('Could not find "My calendars" section');
+  }
+
+  // Check for Other calendars section
+  const otherCalendars = document.querySelector('[aria-label="Other calendars"]');
+  if (!otherCalendars) {
+    issues.push('Could not find "Other calendars" section');
+  }
+
+  // Check for calendar checkboxes
+  const checkboxes = document.querySelectorAll('input[type="checkbox"][aria-label]');
+  if (checkboxes.length === 0) {
+    issues.push('No calendar checkboxes found');
+  }
+
+  // Check for scrollable containers (needed for virtualization handling)
+  let hasScrollable = false;
+  document.querySelectorAll('*').forEach(el => {
+    const style = window.getComputedStyle(el);
+    if ((style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+        el.scrollHeight > el.clientHeight + 10) {
+      hasScrollable = true;
+    }
+  });
+  if (!hasScrollable) {
+    issues.push('No scrollable calendar containers found');
+  }
+
+  return {
+    healthy: issues.length === 0,
+    issues: issues
+  };
+}
+
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+  if (request.action === 'checkUI') {
+    sendResponse(checkUIDependencies());
+    return true;
+  }
+
   if (request.action === 'getCalendars') {
     const forceRefresh = request.forceRefresh || false;
 

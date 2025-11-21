@@ -8,6 +8,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const cacheStatusDiv = document.getElementById('cacheStatus');
   const calendarsHeader = document.getElementById('calendarsHeader');
   const toggleCalendars = document.getElementById('toggleCalendars');
+  const uiWarning = document.getElementById('uiWarning');
+  const uiWarningText = document.getElementById('uiWarningText');
 
   let calendarList = [];
   let activeGroupName = null;
@@ -28,7 +30,28 @@ document.addEventListener('DOMContentLoaded', function() {
     toggleCalendars.innerHTML = calendarsCollapsed ? '&#9654;' : '&#9660;';
   });
 
+  // Check UI dependencies on launch
+  checkUIDependencies();
   getCalendarsFromPage(false);
+
+  function checkUIDependencies() {
+    chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+      if (!tabs[0] || !tabs[0].url || !tabs[0].url.includes('calendar.google.com')) {
+        return;
+      }
+
+      chrome.tabs.sendMessage(tabs[0].id, { action: 'checkUI' }, function(response) {
+        if (chrome.runtime.lastError) {
+          return;
+        }
+
+        if (response && !response.healthy) {
+          uiWarning.style.display = 'block';
+          uiWarningText.textContent = 'Google Calendar UI may have changed. ' + response.issues.join('. ') + '. Some features may not work correctly.';
+        }
+      });
+    });
+  }
 
   function getCalendarsFromPage(forceRefresh = false) {
     if (forceRefresh) {
@@ -128,6 +151,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const groups = data.groups;
       groups[groupName] = { calendars: selectedCalendars };
       groupVisibility[groupName] = true;
+      activeGroupName = groupName; // Set as active group
       chrome.storage.sync.set({ groups: groups, groupVisibility: groupVisibility }, function() {
         groupNameInput.value = '';
 
