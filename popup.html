@@ -10,7 +10,7 @@
     }
     #groupCreation {
       margin-bottom: 15px;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 3px solid #00bcd4;
       padding-bottom: 15px;
     }
     #groups {
@@ -40,9 +40,7 @@
       margin-left: 10px;
     }
     #groupName {
-      width: calc(100% - 120px); /* Adjust width to make room for the add button */
       padding: 5px;
-      margin-right: 5px;
       border: 1px solid #ccc;
       border-radius: 3px;
     }
@@ -61,13 +59,19 @@
     .remove-group {
       background-color: #f44336;
       margin-left: 10px;
+      min-width: 24px;
+      padding: 3px 6px;
+      font-size: 12px;
     }
     .remove-group:hover {
       background-color: #d32f2f;
     }
+    .remove-group.confirm {
+      padding: 3px 8px;
+    }
     #refreshCalendars {
       padding: 4px 10px;
-      font-size: 14px;
+      font-size: 18px;
       vertical-align: middle;
     }
     #calendarsHeader {
@@ -80,6 +84,16 @@
     #toggleCalendars {
       font-size: 12px;
       margin-right: 5px;
+    }
+    .group-calendars-toggle {
+      cursor: pointer;
+      font-size: 10px;
+      margin-right: 5px;
+    }
+    .group-calendars-list {
+      margin-left: 15px;
+      font-size: 12px;
+      color: #555;
     }
     #refreshCalendars:disabled {
       opacity: 0.5;
@@ -99,12 +113,14 @@
 <body>
   <div id="groupCreation">
     <h3>Create Calendar Group</h3>
-    <input type="text" id="groupName" placeholder="Group Name">
-    <button id="addGroup">Add Group</button>
+    <div style="display: flex; gap: 5px;">
+      <input type="text" id="groupName" placeholder="Group Name" style="flex: 1;">
+      <button id="addGroup">Add Group</button>
+    </div>
     
-    <h3 id="calendarsHeader"><span id="toggleCalendars">&#9660;</span>Available Calendars <button id="refreshCalendars" title="Force refresh calendar list">&#8635;</button></h3>
-    <div id="cacheStatus" style="font-size: 11px; color: #666; margin-bottom: 5px;"></div>
-    <div id="calendars"></div>
+    <h3 id="calendarsHeader" style="display: flex; justify-content: space-between; align-items: center;"><span><span id="toggleCalendars">&#9654;</span>Available Calendars</span> <button id="refreshCalendars" title="Force refresh calendar list">&#8635;</button></h3>
+    <div id="cacheStatus" style="font-size: 11px; color: #666; margin-bottom: 5px; display: none;"></div>
+    <div id="calendars" style="display: none;"></div>
   </div>
 
   <div id="existingGroups">

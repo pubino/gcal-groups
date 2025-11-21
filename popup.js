@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let calendarList = [];
   let activeGroupName = null;
   let groupVisibility = {};
-  let calendarsCollapsed = false;
+  let calendarsCollapsed = true;
 
   addGroupButton.addEventListener('click', addGroup);
   refreshButton.addEventListener('click', (e) => {
@@ -130,6 +130,15 @@ document.addEventListener('DOMContentLoaded', function() {
       groupVisibility[groupName] = true;
       chrome.storage.sync.set({ groups: groups, groupVisibility: groupVisibility }, function() {
         groupNameInput.value = '';
+
+        // Collapse Available Calendars section
+        if (!calendarsCollapsed) {
+          calendarsCollapsed = true;
+          calendarsDiv.style.display = 'none';
+          cacheStatusDiv.style.display = 'none';
+          toggleCalendars.innerHTML = '&#9654;';
+        }
+
         loadGroups();
       });
     });
@@ -163,16 +172,23 @@ document.addEventListener('DOMContentLoaded', function() {
         groupDiv.classList.add('visible');
       }
 
+      const calendarCount = groupData.calendars.length;
       groupDiv.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <h3>${groupName} Group</h3>
-          <button class="remove-group" data-group="${groupName}">Remove</button>
+          <button class="remove-group" data-group="${groupName}">&times;</button>
         </div>
-        <div id="calendars-${groupName}"></div>
+        <div class="group-calendars-header" style="cursor: pointer; font-size: 12px; color: #666;">
+          <span class="group-calendars-toggle">&#9654;</span>${calendarCount} calendar${calendarCount !== 1 ? 's' : ''}
+        </div>
+        <div class="group-calendars-list" style="display: none;"></div>
       `;
       groupsDiv.appendChild(groupDiv);
 
-      const calendarListDiv = groupDiv.querySelector(`#calendars-${groupName}`);
+      const calendarListDiv = groupDiv.querySelector('.group-calendars-list');
+      const calendarHeader = groupDiv.querySelector('.group-calendars-header');
+      const calendarToggle = groupDiv.querySelector('.group-calendars-toggle');
+
       groupData.calendars.forEach(calendarName => {
         const calendar = calendarList.find(c => c.name === calendarName);
         if (calendar) {
@@ -182,11 +198,31 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       });
 
+      calendarHeader.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isHidden = calendarListDiv.style.display === 'none';
+        calendarListDiv.style.display = isHidden ? 'block' : 'none';
+        calendarToggle.innerHTML = isHidden ? '&#9660;' : '&#9654;';
+      });
+
       const removeButton = groupDiv.querySelector('.remove-group');
       removeButton.addEventListener('click', function(event) {
         event.stopPropagation();
         const groupToRemove = this.getAttribute('data-group');
-        removeGroup(groupToRemove, groups);
+
+        if (this.classList.contains('confirm')) {
+          removeGroup(groupToRemove, groups);
+        } else {
+          this.classList.add('confirm');
+          this.textContent = 'Remove';
+          // Reset after 3 seconds if not clicked
+          setTimeout(() => {
+            if (this.classList.contains('confirm')) {
+              this.classList.remove('confirm');
+              this.innerHTML = '&times;';
+            }
+          }, 3000);
+        }
       });
 
       groupDiv.addEventListener('click', function() {

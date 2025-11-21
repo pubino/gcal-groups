@@ -163,14 +163,71 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     return true; // Keep message channel open for async response
 
   } else if (request.action === 'setCalendarVisibility') {
-    request.calendars.forEach(calendar => {
-      const input = document.querySelector(`input[type="checkbox"][aria-label="${calendar.name}"]`);
-      if (input && input.checked !== calendar.visible) {
-        // Dispatch a real click event to trigger Google Calendar's handlers
-        input.click();
+    (async () => {
+      // Find main content area to exclude from scrolling
+      const mainContent = document.querySelector('[role="main"]');
+
+      // Find all scrollable containers (same as thoroughCalendarScan)
+      const scrollables = [];
+      document.querySelectorAll('*').forEach(el => {
+        if (mainContent && mainContent.contains(el)) return;
+        const style = window.getComputedStyle(el);
+        if ((style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+            el.scrollHeight > el.clientHeight + 10) {
+          scrollables.push(el);
+        }
+      });
+
+      // Track which calendars we need to toggle
+      const toToggle = new Map(request.calendars.map(c => [c.name, c.visible]));
+      const toggled = new Set();
+
+      // Function to toggle visible calendars
+      const toggleVisible = () => {
+        toToggle.forEach((visible, name) => {
+          if (toggled.has(name)) return;
+          const input = document.querySelector(`input[type="checkbox"][aria-label="${name}"]`);
+          if (input && input.checked !== visible) {
+            input.click();
+            toggled.add(name);
+          } else if (input) {
+            toggled.add(name); // Already correct state
+          }
+        });
+      };
+
+      // First pass - toggle what's visible
+      toggleVisible();
+
+      // If we got them all, we're done
+      if (toggled.size >= toToggle.size) {
+        sendResponse({ success: true, toggled: toggled.size });
+        return;
       }
-    });
-    sendResponse({ success: true });
+
+      // Scroll through containers to find remaining calendars
+      for (const container of scrollables) {
+        if (toggled.size >= toToggle.size) break;
+
+        const originalScroll = container.scrollTop;
+        const scrollHeight = container.scrollHeight;
+        const step = Math.max(50, container.clientHeight * 0.5);
+
+        for (let pos = 0; pos <= scrollHeight; pos += step) {
+          container.scrollTop = pos;
+          await new Promise(r => setTimeout(r, 100));
+          toggleVisible();
+          if (toggled.size >= toToggle.size) break;
+        }
+
+        container.scrollTop = originalScroll;
+      }
+
+      console.log(`Toggled ${toggled.size}/${toToggle.size} calendars`);
+      sendResponse({ success: true, toggled: toggled.size });
+    })();
+
+    return true; // Keep message channel open for async
   }
 
   return true;
