@@ -28,13 +28,21 @@ jobs:
         run: npm run package
 
       - name: Sign extension (CRX)
-        if: github.event_name != 'pull_request' && secrets.CHROME_EXTENSION_PEM != ''
+        if: github.event_name != 'pull_request'
+        env:
+          CHROME_EXTENSION_PEM: ${{ secrets.CHROME_EXTENSION_PEM }}
         run: |
+          # Skip if no signing key configured
+          if [ -z "$CHROME_EXTENSION_PEM" ]; then
+            echo "No signing key configured, skipping CRX signing"
+            exit 0
+          fi
+
           # Install crx tool
           npm install -g crx
 
           # Create .pem file from secret
-          echo "${{ secrets.CHROME_EXTENSION_PEM }}" > extension.pem
+          echo "$CHROME_EXTENSION_PEM" > extension.pem
 
           # Get version from manifest
           VERSION=$(node -p "require('./manifest.json').version")
