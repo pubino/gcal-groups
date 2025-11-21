@@ -66,9 +66,20 @@
       background-color: #d32f2f;
     }
     #refreshCalendars {
-      padding: 2px 6px;
-      font-size: 12px;
+      padding: 4px 10px;
+      font-size: 14px;
       vertical-align: middle;
+    }
+    #calendarsHeader {
+      cursor: pointer;
+      user-select: none;
+    }
+    #calendarsHeader:hover {
+      color: #00bcd4;
+    }
+    #toggleCalendars {
+      font-size: 12px;
+      margin-right: 5px;
     }
     #refreshCalendars:disabled {
       opacity: 0.5;
@@ -91,7 +102,7 @@
     <input type="text" id="groupName" placeholder="Group Name">
     <button id="addGroup">Add Group</button>
     
-    <h3>Available Calendars <button id="refreshCalendars" title="Force refresh calendar list">↻</button></h3>
+    <h3 id="calendarsHeader"><span id="toggleCalendars">&#9660;</span>Available Calendars <button id="refreshCalendars" title="Force refresh calendar list">&#8635;</button></h3>
     <div id="cacheStatus" style="font-size: 11px; color: #666; margin-bottom: 5px;"></div>
     <div id="calendars"></div>
   </div>

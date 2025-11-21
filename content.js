@@ -28,17 +28,26 @@ function collectVisibleCalendars() {
 async function thoroughCalendarScan() {
   const calendars = new Map();
 
-  // Expand all collapsed sections first
-  document.querySelectorAll('[aria-expanded="false"]').forEach(btn => {
-    btn.click();
+  // Find main content area to exclude from scrolling
+  const mainContent = document.querySelector('[role="main"]') ||
+                      document.querySelector('[data-view-name="day"]')?.closest('div') ||
+                      document.querySelector('[aria-label*="Calendar"]');
+
+  // Expand collapsed calendar sections (be specific to avoid search fields)
+  document.querySelectorAll('[aria-label="My calendars"], [aria-label="Other calendars"]').forEach(section => {
+    const toggle = section.querySelector('[aria-expanded="false"]');
+    if (toggle) toggle.click();
   });
   await new Promise(r => setTimeout(r, 500));
 
-  // Find ALL elements that might be scrollable - be aggressive
+  // Find ALL scrollable elements except main content
   const allElements = document.querySelectorAll('*');
   const scrollables = [];
 
   allElements.forEach(el => {
+    // Skip if inside main content area
+    if (mainContent && mainContent.contains(el)) return;
+
     const style = window.getComputedStyle(el);
     const isScrollable = (
       (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
@@ -49,7 +58,7 @@ async function thoroughCalendarScan() {
     }
   });
 
-  console.log(`Found ${scrollables.length} scrollable containers`);
+  console.log(`Found ${scrollables.length} scrollable containers (excluding main content)`);
 
   // Scroll through each container
   for (const container of scrollables) {

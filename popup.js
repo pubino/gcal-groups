@@ -6,13 +6,28 @@ document.addEventListener('DOMContentLoaded', function() {
   const calendarsDiv = document.getElementById('calendars');
   const refreshButton = document.getElementById('refreshCalendars');
   const cacheStatusDiv = document.getElementById('cacheStatus');
+  const calendarsHeader = document.getElementById('calendarsHeader');
+  const toggleCalendars = document.getElementById('toggleCalendars');
 
   let calendarList = [];
   let activeGroupName = null;
   let groupVisibility = {};
+  let calendarsCollapsed = false;
 
   addGroupButton.addEventListener('click', addGroup);
-  refreshButton.addEventListener('click', () => getCalendarsFromPage(true));
+  refreshButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    getCalendarsFromPage(true);
+  });
+
+  calendarsHeader.addEventListener('click', (e) => {
+    if (e.target === refreshButton) return;
+    calendarsCollapsed = !calendarsCollapsed;
+    calendarsDiv.style.display = calendarsCollapsed ? 'none' : 'grid';
+    cacheStatusDiv.style.display = calendarsCollapsed ? 'none' : 'block';
+    toggleCalendars.innerHTML = calendarsCollapsed ? '&#9654;' : '&#9660;';
+  });
+
   getCalendarsFromPage(false);
 
   function getCalendarsFromPage(forceRefresh = false) {
@@ -175,12 +190,18 @@ document.addEventListener('DOMContentLoaded', function() {
       });
 
       groupDiv.addEventListener('click', function() {
-        activeGroupName = groupName;
         groupVisibility[groupName] = !groupVisibility[groupName];
-        
+
+        // Set active group only if it's being activated
+        if (groupVisibility[groupName]) {
+          activeGroupName = groupName;
+        } else if (activeGroupName === groupName) {
+          activeGroupName = null;
+        }
+
         // Select/deselect only the calendars in this group
         selectCalendarsForGroup(groupData.calendars);
-        
+
         chrome.storage.sync.set({ groupVisibility: groupVisibility }, function() {
           displayGroups(groups);
           updateCalendarVisibility(groupData.calendars, groupVisibility[groupName]);
