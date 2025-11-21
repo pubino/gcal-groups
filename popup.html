@@ -65,6 +65,15 @@
     .remove-group:hover {
       background-color: #d32f2f;
     }
+    #refreshCalendars {
+      padding: 2px 6px;
+      font-size: 12px;
+      vertical-align: middle;
+    }
+    #refreshCalendars:disabled {
+      opacity: 0.5;
+      cursor: wait;
+    }
     #calendars {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -82,7 +91,8 @@
     <input type="text" id="groupName" placeholder="Group Name">
     <button id="addGroup">Add Group</button>
     
-    <h3>Available Calendars</h3>
+    <h3>Available Calendars <button id="refreshCalendars" title="Force refresh calendar list">↻</button></h3>
+    <div id="cacheStatus" style="font-size: 11px; color: #666; margin-bottom: 5px;"></div>
     <div id="calendars"></div>
   </div>
 

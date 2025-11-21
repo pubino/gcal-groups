@@ -4,22 +4,60 @@ document.addEventListener('DOMContentLoaded', function() {
   const groupNameInput = document.getElementById('groupName');
   const addGroupButton = document.getElementById('addGroup');
   const calendarsDiv = document.getElementById('calendars');
+  const refreshButton = document.getElementById('refreshCalendars');
+  const cacheStatusDiv = document.getElementById('cacheStatus');
 
   let calendarList = [];
   let activeGroupName = null;
   let groupVisibility = {};
 
   addGroupButton.addEventListener('click', addGroup);
-  getCalendarsFromPage();
+  refreshButton.addEventListener('click', () => getCalendarsFromPage(true));
+  getCalendarsFromPage(false);
 
-  function getCalendarsFromPage() {
+  function getCalendarsFromPage(forceRefresh = false) {
+    if (forceRefresh) {
+      cacheStatusDiv.textContent = 'Scanning calendars...';
+      refreshButton.disabled = true;
+    }
+
     chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
-      chrome.tabs.sendMessage(tabs[0].id, { action: 'getCalendars' }, function(response) {
+      if (!tabs[0]) {
+        cacheStatusDiv.textContent = 'No active tab found';
+        refreshButton.disabled = false;
+        return;
+      }
+
+      if (!tabs[0].url || !tabs[0].url.includes('calendar.google.com')) {
+        cacheStatusDiv.textContent = 'Please open Google Calendar first';
+        refreshButton.disabled = false;
+        return;
+      }
+
+      chrome.tabs.sendMessage(tabs[0].id, { action: 'getCalendars', forceRefresh }, function(response) {
+        refreshButton.disabled = false;
+
+        if (chrome.runtime.lastError) {
+          console.error("Error:", chrome.runtime.lastError.message);
+          cacheStatusDiv.textContent = 'Refresh the Google Calendar page';
+          return;
+        }
+
         if (response && response.calendars) {
           calendarList = response.calendars;
           displayCalendars();
+
+          // Show cache status
+          if (response.fromCache) {
+            const hours = Math.floor(response.cacheAge / (1000 * 60 * 60));
+            const mins = Math.floor((response.cacheAge % (1000 * 60 * 60)) / (1000 * 60));
+            cacheStatusDiv.textContent = `Cached ${hours}h ${mins}m ago (${calendarList.length} calendars)`;
+          } else {
+            cacheStatusDiv.textContent = `Fresh scan (${calendarList.length} calendars)`;
+          }
         } else {
-          console.error("Failed to retrieve calendars.");
+          console.error("Failed to retrieve calendars:", response);
+          cacheStatusDiv.textContent = 'Failed to load calendars';
         }
       });
     });

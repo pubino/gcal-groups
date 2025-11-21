@@ -4,7 +4,8 @@
   "version": "1.0",
   "description": "Manage Google Calendar groups on calendar.google.com.",
   "permissions": [
-    "storage"
+    "storage",
+    "activeTab"
   ],
   "content_scripts": [
     {
