@@ -8,6 +8,9 @@ document.addEventListener('DOMContentLoaded', function() {
   const cacheStatusDiv = document.getElementById('cacheStatus');
   const calendarsHeader = document.getElementById('calendarsHeader');
   const toggleCalendars = document.getElementById('toggleCalendars');
+  const calendarControls = document.getElementById('calendarControls');
+  const selectAllLink = document.getElementById('selectAll');
+  const selectNoneLink = document.getElementById('selectNone');
   const uiWarning = document.getElementById('uiWarning');
   const uiWarningText = document.getElementById('uiWarningText');
 
@@ -27,7 +30,18 @@ document.addEventListener('DOMContentLoaded', function() {
     calendarsCollapsed = !calendarsCollapsed;
     calendarsDiv.style.display = calendarsCollapsed ? 'none' : 'grid';
     cacheStatusDiv.style.display = calendarsCollapsed ? 'none' : 'block';
+    calendarControls.style.display = calendarsCollapsed ? 'none' : 'block';
     toggleCalendars.innerHTML = calendarsCollapsed ? '&#9654;' : '&#9660;';
+  });
+
+  selectAllLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    calendarsDiv.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+  });
+
+  selectNoneLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    calendarsDiv.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
   });
 
   // Check UI dependencies on launch
@@ -152,7 +166,7 @@ document.addEventListener('DOMContentLoaded', function() {
       groups[groupName] = { calendars: selectedCalendars };
       groupVisibility[groupName] = true;
       activeGroupName = groupName; // Set as active group
-      chrome.storage.sync.set({ groups: groups, groupVisibility: groupVisibility }, function() {
+      chrome.storage.sync.set({ groups: groups, groupVisibility: groupVisibility, activeGroupName: activeGroupName }, function() {
         groupNameInput.value = '';
 
         // Collapse Available Calendars section
@@ -160,6 +174,7 @@ document.addEventListener('DOMContentLoaded', function() {
           calendarsCollapsed = true;
           calendarsDiv.style.display = 'none';
           cacheStatusDiv.style.display = 'none';
+          calendarControls.style.display = 'none';
           toggleCalendars.innerHTML = '&#9654;';
         }
 
@@ -169,8 +184,9 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function loadGroups() {
-    chrome.storage.sync.get({ groups: {}, groupVisibility: {} }, function(data) {
+    chrome.storage.sync.get({ groups: {}, groupVisibility: {}, activeGroupName: null }, function(data) {
       groupVisibility = data.groupVisibility;
+      activeGroupName = data.activeGroupName;
       displayGroups(data.groups);
     });
   }
@@ -197,17 +213,52 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       const calendarCount = groupData.calendars.length;
+      groupDiv.setAttribute('draggable', 'true');
+      groupDiv.setAttribute('data-group', groupName);
       groupDiv.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <h3>${groupName} Group</h3>
+        <div class="drag-handle"></div>
+        <div class="group-content">
           <button class="remove-group" data-group="${groupName}">&times;</button>
+          <h3>${groupName} Group</h3>
+          <div class="group-calendars-header" style="cursor: pointer; font-size: 12px; color: #666;">
+            <span class="group-calendars-toggle">&#9654;</span>${calendarCount} calendar${calendarCount !== 1 ? 's' : ''}
+          </div>
+          <div class="group-calendars-list" style="display: none;"></div>
         </div>
-        <div class="group-calendars-header" style="cursor: pointer; font-size: 12px; color: #666;">
-          <span class="group-calendars-toggle">&#9654;</span>${calendarCount} calendar${calendarCount !== 1 ? 's' : ''}
-        </div>
-        <div class="group-calendars-list" style="display: none;"></div>
       `;
       groupsDiv.appendChild(groupDiv);
+
+      // Drag and drop handlers
+      groupDiv.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', groupName);
+        groupDiv.classList.add('dragging');
+      });
+
+      groupDiv.addEventListener('dragend', () => {
+        groupDiv.classList.remove('dragging');
+        document.querySelectorAll('.group').forEach(g => g.classList.remove('drag-over'));
+      });
+
+      groupDiv.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const dragging = document.querySelector('.dragging');
+        if (dragging !== groupDiv) {
+          groupDiv.classList.add('drag-over');
+        }
+      });
+
+      groupDiv.addEventListener('dragleave', () => {
+        groupDiv.classList.remove('drag-over');
+      });
+
+      groupDiv.addEventListener('drop', (e) => {
+        e.preventDefault();
+        groupDiv.classList.remove('drag-over');
+        const draggedGroupName = e.dataTransfer.getData('text/plain');
+        if (draggedGroupName !== groupName) {
+          reorderGroups(draggedGroupName, groupName, groups);
+        }
+      });
 
       const calendarListDiv = groupDiv.querySelector('.group-calendars-list');
       const calendarHeader = groupDiv.querySelector('.group-calendars-header');
@@ -262,7 +313,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Select/deselect only the calendars in this group
         selectCalendarsForGroup(groupData.calendars);
 
-        chrome.storage.sync.set({ groupVisibility: groupVisibility }, function() {
+        chrome.storage.sync.set({ groupVisibility: groupVisibility, activeGroupName: activeGroupName }, function() {
           displayGroups(groups);
           updateCalendarVisibility(groupData.calendars, groupVisibility[groupName]);
         });
@@ -281,6 +332,22 @@ document.addEventListener('DOMContentLoaded', function() {
       chrome.storage.sync.set({ groups: updatedGroups, groupVisibility: updatedVisibility }, function() {
         displayGroups(updatedGroups);
       });
+    });
+  }
+
+  function reorderGroups(draggedName, targetName, groups) {
+    const entries = Object.entries(groups);
+    const draggedIndex = entries.findIndex(([name]) => name === draggedName);
+    const targetIndex = entries.findIndex(([name]) => name === targetName);
+
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    const [draggedEntry] = entries.splice(draggedIndex, 1);
+    entries.splice(targetIndex, 0, draggedEntry);
+
+    const reorderedGroups = Object.fromEntries(entries);
+    chrome.storage.sync.set({ groups: reorderedGroups }, function() {
+      displayGroups(reorderedGroups);
     });
   }
 
