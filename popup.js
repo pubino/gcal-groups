@@ -1,28 +1,59 @@
 // popup.js
 document.addEventListener('DOMContentLoaded', function() {
-  const groupsDiv = document.getElementById('groups');
-  const groupNameInput = document.getElementById('groupName');
-  const addGroupButton = document.getElementById('addGroup');
-  const calendarsDiv = document.getElementById('calendars');
-  const refreshButton = document.getElementById('refreshCalendars');
-  const cacheStatusDiv = document.getElementById('cacheStatus');
-  const calendarsHeader = document.getElementById('calendarsHeader');
-  const toggleCalendars = document.getElementById('toggleCalendars');
-  const calendarControls = document.getElementById('calendarControls');
-  const selectAllLink = document.getElementById('selectAll');
-  const selectNoneLink = document.getElementById('selectNone');
-  const uiWarning = document.getElementById('uiWarning');
-  const uiWarningText = document.getElementById('uiWarningText');
+  const notCalendarError = document.getElementById('notCalendarError');
+  const mainContent = document.getElementById('mainContent');
 
-  let calendarList = [];
-  let activeGroupName = null;
-  let groupVisibility = {};
-  let calendarsCollapsed = true;
+  // Check if we're on Google Calendar first
+  chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+    if (!tabs[0] || !tabs[0].url || !tabs[0].url.includes('calendar.google.com')) {
+      notCalendarError.style.display = 'block';
+      mainContent.style.display = 'none';
+      return;
+    }
 
-  addGroupButton.addEventListener('click', addGroup);
+    // We're on Google Calendar, initialize the extension
+    initializeExtension();
+  });
+
+  function initializeExtension() {
+    const groupsDiv = document.getElementById('groups');
+    const groupNameInput = document.getElementById('groupName');
+    const addGroupButton = document.getElementById('addGroup');
+    const calendarsDiv = document.getElementById('calendars');
+    const refreshButton = document.getElementById('refreshCalendars');
+    const cacheStatusDiv = document.getElementById('cacheStatus');
+    const calendarsHeader = document.getElementById('calendarsHeader');
+    const toggleCalendars = document.getElementById('toggleCalendars');
+    const calendarControls = document.getElementById('calendarControls');
+    const selectAllLink = document.getElementById('selectAll');
+    const selectNoneLink = document.getElementById('selectNone');
+    const uiWarning = document.getElementById('uiWarning');
+    const uiWarningText = document.getElementById('uiWarningText');
+    const groupNameError = document.getElementById('groupNameError');
+
+    let calendarList = [];
+    let activeGroupName = null;
+    let groupVisibility = {};
+    let calendarsCollapsed = true;
+    let isUpdatingCalendars = false;
+
+    addGroupButton.addEventListener('click', addGroup);
   refreshButton.addEventListener('click', (e) => {
     e.stopPropagation();
-    getCalendarsFromPage(true);
+    cacheStatusDiv.textContent = 'Refreshing page...';
+    cacheStatusDiv.style.display = 'block';
+    refreshButton.disabled = true;
+
+    chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+      if (tabs[0]) {
+        chrome.tabs.reload(tabs[0].id, {}, function() {
+          // Wait for page to reload before scanning
+          setTimeout(() => {
+            getCalendarsFromPage(true);
+          }, 2000);
+        });
+      }
+    });
   });
 
   calendarsHeader.addEventListener('click', (e) => {
@@ -144,17 +175,36 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  function showGroupNameError(message) {
+    groupNameError.textContent = message;
+    groupNameError.style.display = 'block';
+    groupNameInput.style.borderColor = '#d32f2f';
+  }
+
+  function clearGroupNameError() {
+    groupNameError.style.display = 'none';
+    groupNameInput.style.borderColor = '#ccc';
+  }
+
+  // Clear error on input
+  groupNameInput.addEventListener('input', clearGroupNameError);
+
   function addGroup() {
     const groupName = groupNameInput.value.trim();
 
     // Validation
     if (!groupName) {
-      alert("Group name is required.");
+      showGroupNameError('Group name is required');
       return;
     }
 
-    if (groupName.length > 255) {
-      alert("Group name must be 255 characters or less.");
+    if (groupName.length > 30) {
+      showGroupNameError('Group name must be 30 characters or less');
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9\s\-_]+$/.test(groupName)) {
+      showGroupNameError('Only letters, numbers, spaces, hyphens, and underscores allowed');
       return;
     }
 
@@ -162,8 +212,21 @@ document.addEventListener('DOMContentLoaded', function() {
       .map(checkbox => checkbox.id);
 
     chrome.storage.sync.get({ groups: {} }, function(data) {
+      // Check for duplicate name
+      if (data.groups[groupName]) {
+        showGroupNameError('A group with this name already exists');
+        return;
+      }
+
+      clearGroupNameError();
       const groups = data.groups;
       groups[groupName] = { calendars: selectedCalendars };
+
+      // Deactivate any currently active group
+      if (activeGroupName && groupVisibility[activeGroupName]) {
+        groupVisibility[activeGroupName] = false;
+      }
+
       groupVisibility[groupName] = true;
       activeGroupName = groupName; // Set as active group
       chrome.storage.sync.set({ groups: groups, groupVisibility: groupVisibility, activeGroupName: activeGroupName }, function() {
@@ -300,8 +363,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       });
 
-      groupDiv.addEventListener('click', function() {
-        groupVisibility[groupName] = !groupVisibility[groupName];
+      groupDiv.addEventListener('click', async function() {
+        // Prevent rapid switching
+        if (isUpdatingCalendars) {
+          return;
+        }
+
+        const wasActive = groupVisibility[groupName];
+
+        // Deactivate any other active group first
+        if (!wasActive && activeGroupName && activeGroupName !== groupName) {
+          groupVisibility[activeGroupName] = false;
+        }
+
+        groupVisibility[groupName] = !wasActive;
 
         // Set active group only if it's being activated
         if (groupVisibility[groupName]) {
@@ -313,9 +388,26 @@ document.addEventListener('DOMContentLoaded', function() {
         // Select/deselect only the calendars in this group
         selectCalendarsForGroup(groupData.calendars);
 
-        chrome.storage.sync.set({ groupVisibility: groupVisibility, activeGroupName: activeGroupName }, function() {
+        chrome.storage.sync.set({ groupVisibility: groupVisibility, activeGroupName: activeGroupName }, async function() {
           displayGroups(groups);
-          updateCalendarVisibility(groupData.calendars, groupVisibility[groupName]);
+
+          isUpdatingCalendars = true;
+
+          if (groupVisibility[groupName]) {
+            // Activating: hide all calendars, then show only this group's
+            const allCalendarNames = calendarList.map(c => c.name);
+            const groupCalendarNames = groupData.calendars;
+            const calendarsToHide = allCalendarNames.filter(name => !groupCalendarNames.includes(name));
+
+            // Hide non-group calendars, then show group calendars sequentially
+            await updateCalendarVisibilityAsync(calendarsToHide, false);
+            await updateCalendarVisibilityAsync(groupData.calendars, true);
+          } else {
+            // Deactivating: just hide this group's calendars
+            await updateCalendarVisibilityAsync(groupData.calendars, false);
+          }
+
+          isUpdatingCalendars = false;
         });
       });
 
@@ -358,5 +450,23 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  function updateCalendarVisibilityAsync(calendarNames, visible) {
+    return new Promise((resolve) => {
+      if (calendarNames.length === 0) {
+        resolve();
+        return;
+      }
+
+      const calendarsToUpdate = calendarNames.map(name => ({ name: name, visible: visible }));
+      chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+        chrome.tabs.sendMessage(tabs[0].id, { action: 'setCalendarVisibility', calendars: calendarsToUpdate }, function() {
+          // Give time for the calendar UI to update
+          setTimeout(resolve, 500);
+        });
+      });
+    });
+  }
+
   loadGroups();
+  }
 });
