@@ -40,9 +40,12 @@ document.addEventListener('DOMContentLoaded', function() {
     addGroupButton.addEventListener('click', addGroup);
   refreshButton.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (isUpdatingCalendars) return;
+
     cacheStatusDiv.textContent = 'Refreshing page...';
     cacheStatusDiv.style.display = 'block';
     refreshButton.disabled = true;
+    isUpdatingCalendars = true;
 
     chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
       if (tabs[0]) {
@@ -50,6 +53,7 @@ document.addEventListener('DOMContentLoaded', function() {
           // Wait for page to reload before scanning
           setTimeout(() => {
             getCalendarsFromPage(true);
+            isUpdatingCalendars = false;
           }, 2000);
         });
       }
@@ -190,6 +194,8 @@ document.addEventListener('DOMContentLoaded', function() {
   groupNameInput.addEventListener('input', clearGroupNameError);
 
   function addGroup() {
+    if (isUpdatingCalendars) return;
+
     const groupName = groupNameInput.value.trim();
 
     // Validation
@@ -416,6 +422,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function removeGroup(groupName, groups) {
+    if (isUpdatingCalendars) return;
+
     chrome.storage.sync.get({ groups: {}, groupVisibility: {} }, function(data) {
       const updatedGroups = data.groups;
       const updatedVisibility = data.groupVisibility;
@@ -428,6 +436,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function reorderGroups(draggedName, targetName, groups) {
+    if (isUpdatingCalendars) return;
+
     const entries = Object.entries(groups);
     const draggedIndex = entries.findIndex(([name]) => name === draggedName);
     const targetIndex = entries.findIndex(([name]) => name === targetName);

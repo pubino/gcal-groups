@@ -21,3 +21,23 @@ The test will:
 - List all calendar names found
 
 Expected output shows passed/failed tests and total calendar count. If scrolling reveals additional calendars beyond the initially visible ones, the test confirms the scroll-based collection is working.
+
+### Unit Tests
+
+To run the popup functionality tests with mocks:
+
+1. Open any webpage in Chrome
+2. Open DevTools (F12 or Cmd+Option+I)
+3. Go to the Console tab
+4. Copy the contents of `tests/popup.test.js` and paste into the console
+5. Tests will auto-run and display results
+
+The tests cover:
+- Group name validation (length, characters, duplicates)
+- Group operations (add, remove, activate, deactivate)
+- Group switching behavior
+- Group reordering
+- Calendar visibility logic
+- Operation locking mechanism
+- URL validation
+- State persistence
