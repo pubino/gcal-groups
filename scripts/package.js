@@ -14,8 +14,7 @@ const FILES_TO_INCLUDE = [
   'manifest.json',
   'content.js',
   'popup.js',
-  'popup.html',
-  'styles.css'
+  'popup.html'
 ];
 
 // Optional files/directories
