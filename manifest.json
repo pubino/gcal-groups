@@ -7,6 +7,12 @@
     "storage",
     "activeTab"
   ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "gcal-groups@pubino.github.io",
+      "strict_min_version": "109.0"
+    }
+  },
   "content_scripts": [
     {
       "matches": ["https://calendar.google.com/*"],

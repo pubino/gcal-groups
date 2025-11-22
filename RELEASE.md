@@ -225,7 +225,129 @@ When submitting to Chrome Web Store, you'll need to justify permissions:
 ### storage
 > Used to persist user-created calendar groups and their settings across browser sessions.
 
+---
+
+# Firefox Add-ons (AMO) Release Automation
+
+This section describes how to publish to Firefox Add-ons (addons.mozilla.org).
+
+## Overview
+
+The Firefox workflow (`publish-firefox.yml`) runs alongside Chrome publishing when a GitHub Release is created.
+
+## Initial Setup (One-Time)
+
+### Step 1: Create Mozilla Developer Account
+
+1. Go to [Firefox Add-on Developer Hub](https://addons.mozilla.org/developers/)
+2. Sign in or create a Firefox account
+3. Accept the developer agreement
+
+### Step 2: Initial Manual Upload
+
+Like Chrome, the first upload must be done manually:
+
+1. Go to [Submit a New Add-on](https://addons.mozilla.org/developers/addon/submit/)
+2. Choose **On this site** for distribution
+3. Upload your extension ZIP:
+   ```bash
+   npm install -g web-ext
+   web-ext build --source-dir . --artifacts-dir dist
+   ```
+4. Fill in listing information:
+   - Name, summary, description
+   - Categories
+   - Screenshots
+   - Support email/website
+5. Submit for review
+
+### Step 3: Generate API Credentials
+
+1. Go to [Manage API Keys](https://addons.mozilla.org/developers/addon/api/key/)
+2. Generate new credentials
+3. Save:
+   - **JWT issuer** (API Key)
+   - **JWT secret** (API Secret)
+
+### Step 4: Configure GitHub Secrets
+
+Add to your repository secrets:
+
+| Secret Name | Description |
+|-------------|-------------|
+| `FIREFOX_API_KEY` | JWT issuer from AMO |
+| `FIREFOX_API_SECRET` | JWT secret from AMO |
+
+## Creating Releases
+
+When you create a GitHub Release:
+- Chrome workflow uploads to Chrome Web Store
+- Firefox workflow uploads to Firefox Add-ons
+
+Both use the same source code and version from `manifest.json`.
+
+## Firefox-Specific Manifest
+
+The manifest includes Firefox-specific settings:
+
+```json
+"browser_specific_settings": {
+  "gecko": {
+    "id": "gcal-groups@pubino.github.io",
+    "strict_min_version": "109.0"
+  }
+}
+```
+
+- **id**: Unique identifier (email format or UUID)
+- **strict_min_version**: 109.0 for Manifest V3 support
+
+Chrome ignores this field, so it's safe to include.
+
+## Differences from Chrome
+
+| Feature | Chrome | Firefox |
+|---------|--------|---------|
+| Store | Chrome Web Store | Firefox Add-ons (AMO) |
+| Manifest | V3 | V3 (109+) |
+| API namespace | `chrome.*` | `chrome.*` or `browser.*` |
+| Review time | Usually 1-3 days | Usually 1-2 days |
+| Auto-publish | After first review | After first review |
+
+## Troubleshooting
+
+### "Add-on ID not found"
+- Ensure `browser_specific_settings.gecko.id` matches what's registered on AMO
+- First submission must be manual
+
+### Signing fails
+- API credentials may be invalid or expired
+- Regenerate at AMO API Keys page
+
+### Review rejected
+- Check AMO reviewer comments
+- Common issues: missing privacy policy, unclear permissions
+
+## Permission Justifications for Firefox
+
+Firefox also requires permission justifications. Use similar text as Chrome:
+
+### activeTab
+> Required to read and toggle calendar checkboxes on calendar.google.com when users switch between calendar groups.
+
+### storage
+> Persists user-created calendar groups across sessions.
+
 ## Resources
+
+- [Firefox Add-on Developer Hub](https://addons.mozilla.org/developers/)
+- [AMO API Documentation](https://addons-server.readthedocs.io/)
+- [web-ext Documentation](https://extensionworkshop.com/documentation/develop/web-ext-command-reference/)
+- [Extension Workshop](https://extensionworkshop.com/)
+
+---
+
+# Chrome Web Store Resources
 
 - [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole)
 - [Chrome Web Store API Documentation](https://developer.chrome.com/docs/webstore/api/)

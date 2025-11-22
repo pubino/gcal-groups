@@ -1,0 +1,60 @@
+name: Publish to Firefox Add-ons
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish-firefox:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run security audit
+        run: npm run test:security
+
+      - name: Install web-ext
+        run: npm install -g web-ext
+
+      - name: Get version
+        id: version
+        run: echo "version=$(node -p "require('./manifest.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Build Firefox extension
+        run: |
+          mkdir -p dist
+          web-ext build --source-dir . --artifacts-dir dist --filename gcal-groups-firefox-v${{ steps.version.outputs.version }}.zip --overwrite-dest
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gcal-groups-firefox
+          path: dist/gcal-groups-firefox-v*.zip
+          retention-days: 30
+
+      - name: Sign and publish to Firefox Add-ons
+        if: secrets.FIREFOX_API_KEY != ''
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.FIREFOX_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.FIREFOX_API_SECRET }}
+        run: |
+          web-ext sign \
+            --source-dir . \
+            --artifacts-dir dist \
+            --channel listed \
+            --amo-metadata amo-metadata.json || echo "Signing submitted - may require manual review"
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/gcal-groups-firefox-v*.zip
