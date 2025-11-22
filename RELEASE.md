@@ -1,123 +1,170 @@
 # Chrome Web Store Release Automation
 
-This document describes how to automate releases to the Chrome Web Store when maintaining this extension on GitHub.
+This document describes the complete setup process for automating releases to the Chrome Web Store via GitHub Actions.
 
 ## Overview
 
 The CI/CD pipeline includes:
 - **test.yml** - Runs tests and security audit on every push/PR
-- **package.yml** - Creates a distributable .zip on tagged releases
+- **package.yml** - Creates distributable .zip and signed .crx on tagged releases
+- **publish.yml** - Uploads to Chrome Web Store when a GitHub Release is created
 
-## Manual Release Process
+## Initial Setup (One-Time)
 
-1. Update version in `manifest.json`
-2. Commit changes
-3. Create a git tag: `git tag v1.1.0`
-4. Push the tag: `git push origin v1.1.0`
-5. The CI will create a release with the packaged extension
-6. Download the .zip from GitHub Releases
-7. Upload to Chrome Web Store Developer Dashboard
+### Step 1: Generate CRX Signing Key
 
-## Automated Chrome Web Store Publishing
+Generate a private key for signing your extension releases:
 
-To fully automate publishing to the Chrome Web Store, add the following workflow:
+**Option A - Using Chrome:**
+1. Open `chrome://extensions`
+2. Enable "Developer mode" (top right)
+3. Click "Pack extension"
+4. Browse to your extension folder
+5. Leave "Private key file" empty (first time only)
+6. Click "Pack Extension"
 
-### 1. Get Chrome Web Store API Credentials
+This creates:
+- `extension.crx` - Can be deleted
+- `extension.pem` - **Your private key (keep safe!)**
+
+**Option B - Using OpenSSL:**
+```bash
+openssl genrsa -out gcal-groups.pem 2048
+```
+
+### Step 2: Extract Public Key
+
+Extract and commit the public key for transparency (users can verify releases):
+
+```bash
+openssl rsa -in gcal-groups.pem -pubout -out gcal-groups-public-key.pem
+git add gcal-groups-public-key.pem
+git commit -m "Add public key for CRX signature verification"
+```
+
+### Step 3: Create Google Cloud Project
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing
-3. Enable the **Chrome Web Store API**
-4. Create OAuth 2.0 credentials:
-   - Go to APIs & Services > Credentials
-   - Create OAuth client ID (Desktop app)
-   - Download client secret JSON
-5. Get a refresh token by running the OAuth flow once locally
+2. Create a new project (e.g., `gcal-groups`)
+3. Go to **APIs & Services → Library**
+4. Search for **Chrome Web Store API** and **Enable** it
 
-### 2. Set Up GitHub Secrets
+### Step 4: Configure OAuth Consent Screen
 
-Add these secrets to your repository (Settings > Secrets > Actions):
+1. Go to **APIs & Services → OAuth consent screen**
+2. Select **External** user type
+3. Fill in required fields:
+   - App name: Your extension name
+   - User support email: Your email
+   - Developer contact: Your email
+4. Click **Save and Continue** through remaining steps
+5. Add yourself as a test user
 
-- `CHROME_EXTENSION_ID` - Your extension ID from Chrome Web Store
-- `CHROME_CLIENT_ID` - OAuth client ID
-- `CHROME_CLIENT_SECRET` - OAuth client secret
-- `CHROME_REFRESH_TOKEN` - OAuth refresh token
+### Step 5: Create OAuth Credentials
 
-### 3. Add Publish Workflow
+1. Go to **APIs & Services → Credentials**
+2. Click **+ CREATE CREDENTIALS → OAuth client ID**
+3. Application type: **Web application**
+4. Name: `gcal-groups-ci` (or similar)
+5. Under "Authorized redirect URIs", add: `http://localhost:8080`
+6. Click **Create**
+7. Save the **Client ID** and **Client Secret**
 
-Create `.github/workflows/publish.yml`:
+### Step 6: Generate Refresh Token
 
-```yaml
-name: Publish to Chrome Web Store
+1. Visit this URL (replace `YOUR_CLIENT_ID`):
+   ```
+   https://accounts.google.com/o/oauth2/auth?response_type=code&scope=https://www.googleapis.com/auth/chromewebstore&client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:8080
+   ```
 
-on:
-  release:
-    types: [published]
+2. Approve access in the consent screen
 
-jobs:
-  publish:
-    runs-on: ubuntu-latest
+3. You'll be redirected to `http://localhost:8080/?code=AUTH_CODE...`
+   - The page will show "connection refused" (that's expected)
+   - Copy the `code` value from the URL (everything between `code=` and `&scope`)
 
-    steps:
-      - uses: actions/checkout@v4
+4. Exchange for refresh token (run as single line):
+   ```bash
+   curl -X POST "https://oauth2.googleapis.com/token" -d "client_id=YOUR_CLIENT_ID" -d "client_secret=YOUR_CLIENT_SECRET" -d "code=AUTH_CODE" -d "grant_type=authorization_code" -d "redirect_uri=http://localhost:8080"
+   ```
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+5. Save the `refresh_token` from the JSON response
 
-      - name: Run tests
-        run: npm test
+### Step 7: Initial Chrome Web Store Upload
 
-      - name: Run security audit
-        run: npm run test:security
+The first upload must be done manually to get an Extension ID:
 
-      - name: Package extension
-        run: npm run package
+1. Package your extension:
+   ```bash
+   npm run package
+   ```
 
-      - name: Upload to Chrome Web Store
-        uses: mnao305/chrome-extension-upload@v5.0.0
-        with:
-          file-path: dist/*.zip
-          extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
-          client-id: ${{ secrets.CHROME_CLIENT_ID }}
-          client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
-          refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
+2. Go to [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole)
 
-      - name: Publish extension
-        uses: mnao305/chrome-extension-upload@v5.0.0
-        with:
-          file-path: dist/*.zip
-          extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
-          client-id: ${{ secrets.CHROME_CLIENT_ID }}
-          client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
-          refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
-          publish: true
-```
+3. Click **New Item** and upload the ZIP from `dist/`
+
+4. Fill in required store listing information:
+   - Description
+   - Screenshots
+   - Privacy policy (if required)
+   - Permission justifications
+
+5. **Save as draft** (or submit for review)
+
+6. Copy your **Extension ID** (32-character string from the dashboard URL or item details)
+
+### Step 8: Configure GitHub Secrets
+
+Go to your repository's **Settings → Secrets and variables → Actions** and add:
+
+| Secret Name | Description |
+|-------------|-------------|
+| `CHROME_EXTENSION_PEM` | Entire contents of your `.pem` private key file |
+| `CHROME_EXTENSION_ID` | 32-character extension ID from Chrome Web Store |
+| `CHROME_CLIENT_ID` | OAuth client ID (ends with `.apps.googleusercontent.com`) |
+| `CHROME_CLIENT_SECRET` | OAuth client secret |
+| `CHROME_REFRESH_TOKEN` | Refresh token from Step 6 |
+
+## Creating Releases
+
+### Automated Release Process
+
+1. Update version in `manifest.json`
+2. Commit and push changes
+3. Create and push a git tag:
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+4. Create a GitHub Release:
+   - Go to **Releases → Create new release**
+   - Select your tag
+   - Add release notes
+   - Click **Publish release**
+
+This triggers:
+- `package.yml` - Creates ZIP and signed CRX, uploads as release artifacts
+- `publish.yml` - Uploads to Chrome Web Store
+
+### Manual Release Process
+
+If you prefer not to auto-publish:
+
+1. Run the package workflow manually or via tag
+2. Download the ZIP from GitHub Release artifacts
+3. Upload manually to Chrome Web Store Developer Dashboard
 
 ## Release Checklist
 
 Before each release:
 
-1. [ ] Update version in `manifest.json`
-2. [ ] Update changelog/release notes
-3. [ ] Run tests locally: `npm test`
-4. [ ] Run security audit: `npm run test:security`
-5. [ ] Test extension manually in Chrome
-6. [ ] Create and push git tag
-
-## Getting OAuth Refresh Token
-
-To get the refresh token for the first time:
-
-```bash
-# Install chrome-webstore-upload-cli
-npm install -g chrome-webstore-upload-cli
-
-# Run authentication flow
-webstore token --client-id YOUR_CLIENT_ID --client-secret YOUR_CLIENT_SECRET
-```
-
-This will open a browser window for OAuth consent. After approving, you'll receive a refresh token to use in CI.
+- [ ] Update version in `manifest.json`
+- [ ] Run tests locally: `npm test`
+- [ ] Run security audit: `npm run test:security`
+- [ ] Test extension manually in Chrome
+- [ ] Commit all changes
+- [ ] Create and push git tag
+- [ ] Create GitHub Release
 
 ## Version Strategy
 
@@ -127,92 +174,60 @@ This will open a browser window for OAuth consent. After approving, you'll recei
 
 Always update `manifest.json` version before creating a release tag.
 
+## CRX Signing for Provenance
+
+The GitHub release includes a signed `.crx` file that users can verify came from you.
+
+### Why Sign Releases?
+
+- Chrome Web Store re-signs extensions with Google's key
+- The signed `.crx` in GitHub releases uses YOUR key
+- Users can verify the release is authentic by comparing public keys
+
+### How Users Verify Releases
+
+1. **Compare extension IDs** - ID in `chrome://extensions` should match published ID
+2. **Extract public key from CRX**:
+   ```bash
+   npx crx-util info gcal-groups.crx
+   ```
+3. **Compare with repo** - Check against `gcal-groups-public-key.pem` in the repository
+
 ## Troubleshooting
 
 ### Upload fails with 401
-- Refresh token may be expired - regenerate it
-- Check that Chrome Web Store API is enabled
+- Refresh token may have expired - regenerate it (repeat Step 6)
+- Verify Chrome Web Store API is enabled in Google Cloud Console
 
-### Upload succeeds but publish fails
-- Check Chrome Web Store Developer Dashboard for policy violations
-- Review requires human approval for first submission
+### Upload succeeds but publish fails with 400
+- **First submission**: Requires manual review in Developer Dashboard
+- **Incomplete listing**: Fill in all required fields (description, screenshots, etc.)
+- **Policy violations**: Check Developer Dashboard for specific issues
 
 ### Tests fail in CI
 - Check Node.js version compatibility
 - Review security audit results for false positives
 
-## CRX Signing and Private Keys
+### CRX signing skipped
+- Verify `CHROME_EXTENSION_PEM` secret is set
+- Check the secret contains the full PEM file including headers
 
-Chrome extensions use RSA key pairs for identity. The extension ID is derived from the public key.
+### "invalid_grant" when getting refresh token
+- Authorization codes expire quickly - get a fresh code and retry immediately
 
-### For Chrome Web Store Distribution
+## Permission Justifications
 
-The Web Store manages signing automatically. You **don't need** to include a `.pem` file in your uploads.
+When submitting to Chrome Web Store, you'll need to justify permissions:
 
-### To Maintain Consistent Extension ID
+### activeTab
+> This extension requires activeTab to interact with the Google Calendar page (calendar.google.com) to read available calendars and toggle their visibility when users switch between calendar groups. It only operates on calendar.google.com as specified in content_scripts matches.
 
-If you want the same extension ID during development and after publishing:
-
-1. Generate a key pair once:
-   ```bash
-   # In Chrome: chrome://extensions > Pack extension
-   # Or via command line:
-   google-chrome --pack-extension=/path/to/gcal-groups
-   ```
-
-2. This creates:
-   - `gcal-groups.crx` - Signed extension package
-   - `gcal-groups.pem` - **Private key (keep secret!)**
-
-3. For first Web Store upload only, include `key.pem` in the root of your ZIP
-
-4. **Never commit the .pem file** - add to `.gitignore`
-
-5. **Extract and publish the public key** for user verification:
-   ```bash
-   # Extract public key from .pem
-   openssl rsa -in gcal-groups.pem -pubout -out public-key.pem
-
-   # Or get base64 key for manifest.json
-   openssl rsa -in gcal-groups.pem -pubout -outform DER | base64
-   ```
-
-### How Users Verify Your Releases
-
-Users can verify a `.crx` came from you by:
-
-1. **Compare extension IDs** - The ID in `chrome://extensions` should match your published ID
-2. **Extract public key from CRX**:
-   ```bash
-   # Using crx-util or similar tool
-   npx crx-util info gcal-groups.crx
-   ```
-3. **Check against published key** - Compare with public key in your repo/README
-
-### For Self-Distribution (Outside Web Store)
-
-If distributing the extension outside the Web Store:
-
-```bash
-google-chrome --pack-extension=/path/to/gcal-groups --pack-extension-key=/path/to/gcal-groups.pem
-```
-
-Store the `.pem` file as a GitHub secret (`CHROME_EXTENSION_PEM`) and use it in CI to sign releases.
-
-### GitHub Action for CRX Signing
-
-```yaml
-- name: Sign extension
-  uses: nickolasburr/chrome-extension-crx-action@v1
-  with:
-    extension-dir: .
-    private-key: ${{ secrets.CHROME_EXTENSION_PEM }}
-    output-file: dist/gcal-groups.crx
-```
+### storage
+> Used to persist user-created calendar groups and their settings across browser sessions.
 
 ## Resources
 
-- [Chrome Web Store API](https://developer.chrome.com/docs/webstore/api/)
-- [chrome-extension-upload Action](https://github.com/mnao305/chrome-extension-upload)
-- [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole)
-- [Extension Packaging Docs](https://developer.chrome.com/docs/extensions/how-to/distribute/host-on-linux)
+- [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole)
+- [Chrome Web Store API Documentation](https://developer.chrome.com/docs/webstore/api/)
+- [chrome-extension-upload GitHub Action](https://github.com/mnao305/chrome-extension-upload)
+- [Extension Packaging Documentation](https://developer.chrome.com/docs/extensions/how-to/distribute/host-on-linux)
