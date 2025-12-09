@@ -42,7 +42,7 @@ jobs:
           retention-days: 30
 
       - name: Sign and publish to Firefox Add-ons
-        if: secrets.FIREFOX_API_KEY != ''
+        if: ${{ secrets.FIREFOX_API_KEY != '' }}
         env:
           WEB_EXT_API_KEY: ${{ secrets.FIREFOX_API_KEY }}
           WEB_EXT_API_SECRET: ${{ secrets.FIREFOX_API_SECRET }}
