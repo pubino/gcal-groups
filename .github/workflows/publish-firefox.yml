@@ -40,11 +40,14 @@ jobs:
           retention-days: 30
 
       - name: Sign and publish to Firefox Add-ons
-        if: ${{ secrets.FIREFOX_API_KEY != '' }}
         env:
           WEB_EXT_API_KEY: ${{ secrets.FIREFOX_API_KEY }}
           WEB_EXT_API_SECRET: ${{ secrets.FIREFOX_API_SECRET }}
         run: |
+          if [ -z "$WEB_EXT_API_KEY" ]; then
+            echo "Skipping signing - FIREFOX_API_KEY not configured"
+            exit 0
+          fi
           web-ext sign \
             --source-dir . \
             --artifacts-dir dist \
