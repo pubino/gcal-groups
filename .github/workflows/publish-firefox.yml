@@ -35,7 +35,7 @@ jobs:
           web-ext build --source-dir . --artifacts-dir dist --filename gcal-groups-firefox-v${{ steps.version.outputs.version }}.zip --overwrite-dest
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: gcal-groups-firefox
           path: dist/gcal-groups-firefox-v*.zip
