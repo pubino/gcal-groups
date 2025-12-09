@@ -1,5 +1,4 @@
 name: Publish to Firefox Add-ons
-
 on:
   release:
     types: [published]
